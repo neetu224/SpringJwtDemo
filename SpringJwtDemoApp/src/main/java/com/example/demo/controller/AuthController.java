@@ -13,12 +13,15 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
+import com.example.demo.dto.UserDto;
+import com.example.demo.mapper.UserMapper;
 import com.example.demo.model.Role;
 import com.example.demo.model.RoleName;
 import com.example.demo.model.User;
@@ -29,29 +32,28 @@ import com.example.demo.payload.SignUpRequest;
 import com.example.demo.repository.RoleRepository;
 import com.example.demo.repository.UserRepository;
 import com.example.demo.security.JwtTokenProvider;
+import com.example.demo.service.RoleService;
+import com.example.demo.service.UserService;
 
-/**
- * Created by rajeevkumarsingh on 02/08/17.
- */
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
 
     @Autowired
-    AuthenticationManager authenticationManager;
+    private AuthenticationManager authenticationManager;
 
     @Autowired
-    UserRepository userRepository;
+    private UserService userService;
 
     @Autowired
-    RoleRepository roleRepository;
+    private RoleService roleService;
 
     @Autowired
-    PasswordEncoder passwordEncoder;
+    private PasswordEncoder passwordEncoder;
 
     @Autowired
-    JwtTokenProvider tokenProvider;
-
+    private JwtTokenProvider tokenProvider;
+    
     @PostMapping("/signin")
     public ResponseEntity<?> authenticateUser(@Valid @RequestBody LoginRequest loginRequest) {
 
@@ -68,30 +70,29 @@ public class AuthController {
         return ResponseEntity.ok(new JwtAuthenticationResponse(jwt));
     }
 
-    @PostMapping("/signup")
-    public ResponseEntity<?> registerUser(@Valid @RequestBody SignUpRequest signUpRequest) throws Exception {
-        if(userRepository.existsByUsername(signUpRequest.getUsername())) {
+    @PostMapping("/signup/{roleName}")
+    public ResponseEntity<?> registerUser(@Valid @RequestBody SignUpRequest signUpRequest, @PathVariable("roleName") RoleName roleName) throws Exception {
+        if(userService.existsByUsername(signUpRequest.getUsername())) {
             return new ResponseEntity(new ApiResponse(false, "Username is already taken!"),
                     HttpStatus.BAD_REQUEST);
         }
 
-        if(userRepository.existsByEmail(signUpRequest.getEmail())) {
+        if(userService.existsByEmail(signUpRequest.getEmail())) {
             return new ResponseEntity(new ApiResponse(false, "Email Address already in use!"),
                     HttpStatus.BAD_REQUEST);
         }
 
-        // Creating user's account
         User user = new User(signUpRequest.getName(), signUpRequest.getUsername(),
-                signUpRequest.getEmail(), signUpRequest.getPassword());
+        		signUpRequest.getEmail(), signUpRequest.getPassword());
 
         user.setPassword(passwordEncoder.encode(user.getPassword()));
 
-        Role userRole = roleRepository.findByName(RoleName.ROLE_USER)
+        Role userRole = roleService.findByName(roleName)
                 .orElseThrow(() -> new Exception("User Role not set."));
 
         user.setRoles(Collections.singleton(userRole));
 
-        User result = userRepository.save(user);
+        User result = userService.save(user);
 
         URI location = ServletUriComponentsBuilder
                 .fromCurrentContextPath().path("/users/{username}")
